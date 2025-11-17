@@ -1,0 +1,18 @@
+{
+	"extension": {
+		"version": "0.7.2025041600",
+		"json": 2
+	},
+	"project": {
+		"name": "PID",
+		"description": "The code discussed in How does a Proportional-Integral-Differential (PID) control system contribute to precise movement in robotics",
+		"creationDate": "11/17/2025, 3:59:26 PM",
+		"platform": "V5",
+		"language": "python",
+		"slot": 1,
+		"sdkVersion": "V5_1_0_1_25",
+		"python": {
+			"main": "src/main.py"
+		}
+	}
+}
