@@ -6,6 +6,7 @@
 # 	Description:  V5 project                                                   #
 #                                                                              #
 # ---------------------------------------------------------------------------- #
+#vex:disable=repl
 
 # Library imports
 from vex import *
@@ -196,9 +197,6 @@ class turnPID(PID):
             totalError += error
             # sets output to the total PID equation or the speedCap
             self.output = min(error * self.KP + derivative * self.KD + (totalError * 0.050) * self.KI, (self.speedCap if error * self.KP + derivative * self.KD + (totalError * 0.050) * self.KI > 0 else -self.speedCap), key=abs)
-            # sets totalError to zero if speedCap reached to prevent integral windup 
-            if abs(self.output) == self.speedCap:
-                totalError = 0
             # sets motor velocity to the PID output
             self.left.set_velocity(self.output, PERCENT)
             self.right.set_velocity(-self.output, PERCENT)
@@ -304,14 +302,110 @@ class turnPID(PID):
         # saves the data buffer onto the SD card as a SCV
         self.brain.sdcard.savefile(sd_file_name, bytearray(data_buffer, 'utf-8'))
 
+    def serialGraph(self, desiredValue: int, tolerance: float, settleTime: float = 0.5, stopButton = False, serialPort = '/dev/serial1'):
+        """Runs loop similar to PID.run but saves a CSV containing PID data.
+
+        CSV columns:
+            time, proportional, derivative, integral, output, desiredValue, angle
+        """
+        serial = open(serialPort,'wb')
+
+        # makes a stopButton if set to true to manually stop the loop
+        if stopButton:
+            stop = button(60, 220, 250, 10, Color.RED, "terminate")
+            stop.draw()
+            brain.screen.render()
+
+        # csv variables to store PID data
+        csvHeaderText:str = "time, proportional, derivative, integral, output, desiredValue, angle"
+        data_buffer:str = csvHeaderText + "\n"
+
+        # starts up drivetrain motors with speed set to zero
+        self.right.spin(FORWARD, 0)
+        self.left.spin(FORWARD, 0)
+
+        # necessary local variables, totalError over the entire loop and i: iterations
+        totalError:float = 0.0
+        i = 0
+
+        # calculates the initial error, paying mind to the smallest angles.
+        if desiredValue - self.yourSensor() > 0:
+            if desiredValue - self.yourSensor() <= 180:
+                error:float = desiredValue - self.yourSensor()
+            elif desiredValue - self.yourSensor() > 180:
+                error:float = desiredValue - self.yourSensor() - 360
+        else:
+            if desiredValue - self.yourSensor() >= -180:
+                error:float = desiredValue - self.yourSensor()
+            elif desiredValue - self.yourSensor() < -180:
+                error:float = 360 + (desiredValue - self.yourSensor())
+
+        # adds initial error to the errorList used in detecting stabilization and previousError used in the derivative
+        errorList = [error]
+        previousError:float = error
+
+        # runs the PID loop until setpoint is stabilized by detecting the absolute smallest error
+        while abs(max(errorList, key=abs)) > tolerance:
+            # counts iterations
+            i += 1
+            #calculates error, paying mind to smallest angles
+            if desiredValue - self.yourSensor() > 0:
+                if desiredValue - self.yourSensor() <= 180:
+                    error:float = desiredValue - self.yourSensor()
+                elif desiredValue - self.yourSensor() > 180:
+                    error:float = desiredValue - self.yourSensor() - 360
+            else:
+                if desiredValue - self.yourSensor() >= -180:
+                    error:float = desiredValue - self.yourSensor()
+                elif desiredValue - self.yourSensor() < -180:
+                    error:float = 360 + (desiredValue - self.yourSensor())
+
+            # calculates derivative using error, previousError and sampling time
+            derivative = (error - previousError) / 0.050
+            # adds current error to totalError used in integral term
+            totalError += error
+            # sets output to the total PID equation or the speedCap
+            self.output = min(error * self.KP + derivative * self.KD + (totalError * 0.050) * self.KI, (self.speedCap if error * self.KP + derivative * self.KD + (totalError * 0.050) * self.KI > 0 else -self.speedCap), key=abs)
+            # sets totalError to zero if speedCap reached to prevent integral windup 
+            if abs(self.output) == self.speedCap:
+                totalError = 0
+            # sets motor velocity to the PID output
+            self.left.set_velocity(self.output, PERCENT)
+            self.right.set_velocity(-self.output, PERCENT)
+            # waits 50 MS to lighten program load
+            wait(50)
+            # sets previousError to current error for derivative term 
+            previousError = error
+            # adds error to errorList and deletes the first error if the list is longer than the settleTime divided by sampling time
+            errorList.append(error)
+            if len(errorList) > settleTime/0.050:
+                errorList.pop(0)
+
+            # save one row of PID data to buffer
+            data_buffer += str(i * 0.050) + ","
+            data_buffer += "%.3f" % (error*self.KP) + ","
+            data_buffer += "%.3f" % (derivative * self.KD)  + ","
+            data_buffer += "%.3f" % (totalError * 0.050 * self.KI) + ","
+            data_buffer += "%.3f" % self.output + ","
+            data_buffer += str(desiredValue) + ","
+            data_buffer += "%.3f" % self.yourSensor() + "\n"
+
+
+            # breaks the pid loop if the stopButton is pressed
+            if stopButton and stop.isPressed(self.brain.screen.x_position(),self.brain.screen.y_position()):
+                break
+        
+        # sends the data buffer over serial
+        serial.write(bytearray(data_buffer,'utf-8'))
+        
 # --------------------
 # PID setup
 # --------------------
 # create a turnPID instance for drivetrain rotation
 rotatePID = turnPID(yourSensor= gyro.heading , brain = brain, leftMotorGroup=left, rightMotorGroup=right, speedCap= 20,
-                     KP = 0.34,
-                     KI = 0.13,
-                     KD = 0.014
+                     KP = 0.7,
+                     KI = 0.0,
+                     KD = 0.0
                      )
 
 # --------------------
@@ -334,6 +428,10 @@ def graph():
         right.stop(HOLD)
         left.stop(HOLD)
 
+def graph90():
+    right.spin(FORWARD, 0)
+    left.spin(FORWARD, 0)
+    rotatePID.graph(90,2)
 # --------------------
 # UI classes
 # --------------------
@@ -372,11 +470,6 @@ class button:
         return self.Pressed
 
 # --------------------
-# competition
+# main calls
 # --------------------
-    
-def user_control():
-    pass
-
-# create competition instance
-comp = Competition(user_control, graph)
+graph90()
