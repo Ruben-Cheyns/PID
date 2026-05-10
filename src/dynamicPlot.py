@@ -1,3 +1,12 @@
+# ---------------------------------------------------------------------------- #
+# dynamicPlot.py - Real-time PID Data Plotter                                  #
+# Author: Ruben Cheyns                                                         #
+# License: MIT (see LICENSE file for details)                                  #
+#                                                                              #
+# If you use this code in any publication, please cite the associated        #
+# thesis and poster (see CITATION.cff for citation formats).                 #
+# ---------------------------------------------------------------------------- #
+
 import serial
 import sys
 from matplotlib import pyplot as plt

@@ -1,3 +1,12 @@
+# ---------------------------------------------------------------------------- #
+# PID.py - PID Controller Library                                              #
+# Author: Ruben Cheyns                                                         #
+# License: MIT (see LICENSE file for details)                                  #
+#                                                                              #
+# If you use this code in any publication, please cite the associated        #
+# thesis and poster (see CITATION.cff for citation formats).                 #
+# ---------------------------------------------------------------------------- #
+
 from vex import *
 from UI import *
 

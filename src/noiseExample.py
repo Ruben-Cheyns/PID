@@ -1,3 +1,12 @@
+# ---------------------------------------------------------------------------- #
+# noiseExample.py - Noise Demonstration for PID Explanation                    #
+# Author: Ruben Cheyns                                                         #
+# License: MIT (see LICENSE file for details)                                  #
+#                                                                              #
+# If you use this code in any publication, please cite the associated        #
+# thesis and poster (see CITATION.cff for citation formats).                 #
+# ---------------------------------------------------------------------------- #
+
 from matplotlib import pyplot as plt
 import numpy as np
 

@@ -1,9 +1,13 @@
 # ---------------------------------------------------------------------------- #
 #                                                                              #
 # 	Module:       main.py                                                      #
-# 	Author:       RubenCheyns                                                  #
+# 	Author:       Ruben Cheyns                                                 #
 # 	Created:      4/28/2025, 1:04:28 PM                                        #
-# 	Description:  V5 project                                                   #
+# 	Description:  V5 project - PID Controller Tuning                           #
+# 	License:      MIT (see LICENSE file for details)                           #
+#                                                                              #
+# 	If you use this code in any publication, please cite the associated       #
+# 	thesis and poster (see CITATION.cff for citation formats).                #
 #                                                                              #
 # ---------------------------------------------------------------------------- #
 #vex:disable=repl

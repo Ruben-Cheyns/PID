@@ -1,0 +1,33 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+type: software
+authors:
+  - family-names: "Cheyns"
+    given-names: "Ruben"
+title: "PID Control System Tutorial and Implementation"
+version: "1.0.0"
+date-released: 2025-04-28
+url: "https://github.com/YOUR_USERNAME/PID"
+repository: "https://github.com/YOUR_USERNAME/PID"
+license: MIT
+keywords:
+  - "PID Control"
+  - "Robotics"
+  - "VEX Robotics"
+  - "Control Systems"
+  - "Education"
+references:
+  - type: thesis
+    authors:
+      - family-names: "Cheyns"
+        given-names: "Ruben"
+    title: "How does a Proportional-Integral-Differential (PID) control system contribute to precise movement in robotics? The basics of PID controllers used in VEX robotics"
+    year: 2025
+    note: "Thesis/Educational Work"
+  - type: article
+    title: "Associated Poster Presentation"
+    authors:
+      - family-names: "Cheyns"
+        given-names: "Ruben"
+    year: 2025
+    note: "Poster_CheynsRuben"
