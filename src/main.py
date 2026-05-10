@@ -15,27 +15,17 @@ from vex import *
 # vex device config #
 #-------------------#
 brain = Brain()
-gyro = Inertial(Ports.PORT17)
+gyro = Inertial(Ports.PORT12)
 controller_1 = Controller()
 controller_2 = Controller()
 
-left_1 = Motor(Ports.PORT20, GearSetting.RATIO_6_1, False)
-left_2 = Motor(Ports.PORT19, GearSetting.RATIO_6_1, False)
-left_3 = Motor(Ports.PORT18, GearSetting.RATIO_6_1, True)
-left = MotorGroup(left_1, left_2, left_3)
+left_1 = Motor(Ports.PORT9, GearSetting.RATIO_18_1, False)
+left_2 = Motor(Ports.PORT10, GearSetting.RATIO_18_1, False)
+left = MotorGroup(left_1, left_2)
 
-right_1 = Motor(Ports.PORT10, GearSetting.RATIO_6_1, True)
-right_2 = Motor(Ports.PORT9, GearSetting.RATIO_6_1, True)
-right_3 = Motor(Ports.PORT8, GearSetting.RATIO_6_1, False)
-right = MotorGroup(right_1, right_2, right_3)
-
-intakeMotor = Motor(Ports.PORT1, GearSetting.RATIO_18_1, True)
-storageMotor = Motor(Ports.PORT11, GearSetting.RATIO_18_1, True)
-outMotor = Motor(Ports.PORT16, True)
-
-loaderPiston = Pneumatics(brain.three_wire_port.a)
-descorePiston = Pneumatics(brain.three_wire_port.h)
-outPiston = Pneumatics(brain.three_wire_port.b)
+right_1 = Motor(Ports.PORT19, GearSetting.RATIO_18_1, True)
+right_2 = Motor(Ports.PORT20, GearSetting.RATIO_18_1, True)
+right = MotorGroup(right_1, right_2)
 
 #-------------#
 # PID classes #
@@ -144,6 +134,13 @@ class turnPID(PID):
         self.brain = brain
         self.output:float = 0
         self.speedCap:int = speedCap
+
+    def parameters(self, parTuple):
+        self.KP = parTuple[1]
+        self.KI = parTuple[2]
+        self.KD = parTuple[3]
+        self.speedCap = parTuple[4]
+        
 
     def run (self, desiredValue: int, tolerance: float, settleTime: float = 0.5):
         """Run turn PID and set motor velocities until target heading stabilized.
@@ -303,12 +300,18 @@ class turnPID(PID):
         self.brain.sdcard.savefile(sd_file_name, bytearray(data_buffer, 'utf-8'))
 
     def serialGraph(self, desiredValue: int, tolerance: float, settleTime: float = 0.5, stopButton = False, serialPort = '/dev/serial1'):
-        """Runs loop similar to PID.run but saves a CSV containing PID data.
+        """Sends full PID data over serial compatible with V5 Serial Plotter.
 
+        Data format: {time,proportional,derivative,integral,output,desiredValue,angle}
+        
         CSV columns:
             time, proportional, derivative, integral, output, desiredValue, angle
         """
-        serial = open(serialPort,'wb')
+        try:
+            serial = open(serialPort,'w+b')
+        except Exception as e:
+            print(f"Failed to open serial port {serialPort}: {e}")
+            return
 
         # makes a stopButton if set to true to manually stop the loop
         if stopButton:
@@ -316,9 +319,12 @@ class turnPID(PID):
             stop.draw()
             brain.screen.render()
 
-        # csv variables to store PID data
-        csvHeaderText:str = "time, proportional, derivative, integral, output, desiredValue, angle"
-        data_buffer:str = csvHeaderText + "\n"
+        # Send START command
+        try:
+            serial.write(bytearray("{START}\n", 'utf-8'))
+            print("Sent START command")
+        except Exception as e:
+            print(f"Error sending START: {e}")
 
         # starts up drivetrain motors with speed set to zero
         self.right.spin(FORWARD, 0)
@@ -380,23 +386,40 @@ class turnPID(PID):
             errorList.append(error)
             if len(errorList) > settleTime/0.050:
                 errorList.pop(0)
-
-            # save one row of PID data to buffer
-            data_buffer += str(i * 0.050) + ","
-            data_buffer += "%.3f" % (error*self.KP) + ","
-            data_buffer += "%.3f" % (derivative * self.KD)  + ","
-            data_buffer += "%.3f" % (totalError * 0.050 * self.KI) + ","
-            data_buffer += "%.3f" % self.output + ","
-            data_buffer += str(desiredValue) + ","
-            data_buffer += "%.3f" % self.yourSensor() + "\n"
-
+            
+            # sends the data over serial with all values: {time,prop,deriv,integral,output,desiredValue,angle}
+            try:
+                timestamp = i * 0.050
+                prop = error * self.KP
+                deriv = derivative * self.KD
+                integral = totalError * 0.050 * self.KI
+                output = self.output
+                desired = desiredValue
+                angle = self.yourSensor()
+                
+                data_line = "{%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f}\n" % (timestamp, prop, deriv, integral, output, desired, angle)
+                serial.write(bytearray(data_line, 'utf-8'))
+            except Exception as e:
+                print(f"Error sending data: {e}")
 
             # breaks the pid loop if the stopButton is pressed
             if stopButton and stop.isPressed(self.brain.screen.x_position(),self.brain.screen.y_position()):
                 break
+            
+            self.brain.screen.clear_screen()
+            self.brain.screen.print_at(self.yourSensor(),x=100,y=100)
         
-        # sends the data buffer over serial
-        serial.write(bytearray(data_buffer,'utf-8'))
+        # Send STOP command to plotter
+        try:
+            serial.write(bytearray("{STOP}\n", 'utf-8'))
+            print("Sent STOP command")
+        except Exception as e:
+            print(f"Error sending STOP: {e}")
+        
+        serial.close()
+        print("Serial connection closed")
+        
+        
         
 # --------------------
 # PID setup
@@ -407,6 +430,7 @@ rotatePID = turnPID(yourSensor= gyro.heading , brain = brain, leftMotorGroup=lef
                      KI = 0.0,
                      KD = 0.0
                      )
+
 
 # --------------------
 # autonomous routines
@@ -429,9 +453,58 @@ def graph():
         left.stop(HOLD)
 
 def graph90():
+    gyro.set_heading(0)
     right.spin(FORWARD, 0)
     left.spin(FORWARD, 0)
-    rotatePID.graph(90,2)
+    rotatePID.serialGraph(90,2)
+
+def dynamicGraph():
+    controllerList = [("Pcontroller",0.7,0,0,20),("Comp",0.34,0.13,0.014,100)]
+    gyro.set_heading(0)
+    angle = 0
+    controller = 0
+    right.spin(FORWARD, 0)
+    left.spin(FORWARD, 0)
+    while True:
+        if controller_1.buttonUp.pressing():
+            angle += 1 
+            controller_1.screen.clear_row(3)
+            controller_1.screen.set_cursor(3,1)
+            controller_1.screen.print(str(angle) + controllerList[controller][0])
+        if controller_1.buttonDown.pressing():
+            angle -= 1 
+            controller_1.screen.clear_row(3)
+            controller_1.screen.set_cursor(3,1)
+            controller_1.screen.print(str(angle) + controllerList[controller][0])
+        if controller_1.buttonRight.pressing():
+            angle = round(angle/10)*10 + 10 
+            controller_1.screen.clear_row(3)
+            controller_1.screen.set_cursor(3,1)
+            controller_1.screen.print(str(angle) + controllerList[controller][0])
+        if controller_1.buttonLeft.pressing():
+            angle = round(angle/10)*10 - 10 
+            controller_1.screen.clear_row(3)
+            controller_1.screen.set_cursor(3,1)
+            controller_1.screen.print(str(angle) + controllerList[controller][0])
+        if controller_1.buttonX.pressing():
+            if controller >= (len(controllerList)-1):
+                controller = 0
+            else:
+                controller += 1
+            controller_1.screen.clear_row(3)
+            controller_1.screen.set_cursor(3,1)
+            controller_1.screen.print(str(angle) + controllerList[controller][0])
+        if controller_1.buttonA.pressing():
+            rotatePID.parameters(parTuple=controllerList[controller]) 
+            rotatePID.serialGraph(angle,2)
+            controller_1.screen.clear_row(3)
+            controller_1.screen.set_cursor(3,1)
+            controller_1.screen.print("done" + str(angle) + controllerList[controller][0])
+        if controller_1.buttonY.pressing():
+            break
+
+        wait(500)
+
 # --------------------
 # UI classes
 # --------------------
@@ -472,4 +545,10 @@ class button:
 # --------------------
 # main calls
 # --------------------
-graph90()
+gyro.calibrate()
+while gyro.is_calibrating():
+    sleep(50, MSEC)
+controller_1.screen.clear_row(3)
+controller_1.screen.set_cursor(3,1)
+controller_1.screen.print("calibrated")
+dynamicGraph()
