@@ -6,9 +6,9 @@ authors:
     given-names: "Ruben"
 title: "PID Control System Tutorial and Implementation"
 version: "1.0.0"
-date-released: 2025-04-28
-url: "https://github.com/YOUR_USERNAME/PID"
-repository: "https://github.com/YOUR_USERNAME/PID"
+date-released: 2026-05-11
+url: "https://github.com/Ruben-Cheyns/PID"
+repository: "https://github.com/Ruben-Cheyns/PID"
 license: MIT
 keywords:
   - "PID Control"
@@ -29,5 +29,5 @@ references:
     authors:
       - family-names: "Cheyns"
         given-names: "Ruben"
-    year: 2025
+    year: 2026
     note: "Poster_CheynsRuben"
