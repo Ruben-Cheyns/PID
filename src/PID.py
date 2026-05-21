@@ -115,6 +115,13 @@ class turnPID(PID):
         self.output:float = 0
         self.speedCap:int = speedCap
 
+    def parameters(self, parTuple):
+        self.KP = parTuple[1]
+        self.KI = parTuple[2]
+        self.KD = parTuple[3]
+        self.speedCap = parTuple[4]
+        
+
     def run (self, desiredValue: int, tolerance: float, settleTime: float = 0.5):
         """Run turn PID and set motor velocities until target heading stabilized.
         desiredValue: the angle you wish to turn to in degrees
@@ -167,9 +174,6 @@ class turnPID(PID):
             totalError += error
             # sets output to the total PID equation or the speedCap
             self.output = min(error * self.KP + derivative * self.KD + (totalError * 0.050) * self.KI, (self.speedCap if error * self.KP + derivative * self.KD + (totalError * 0.050) * self.KI > 0 else -self.speedCap), key=abs)
-            # sets totalError to zero if speedCap reached to prevent integral windup 
-            if abs(self.output) == self.speedCap:
-                totalError = 0
             # sets motor velocity to the PID output
             self.left.set_velocity(self.output, PERCENT)
             self.right.set_velocity(-self.output, PERCENT)
@@ -270,7 +274,134 @@ class turnPID(PID):
 
             # breaks the pid loop if the stopButton is pressed
             if stopButton and stop.isPressed(self.brain.screen.x_position(),self.brain.screen.y_position()):
+                self.brain.screen.clear_screen()
                 break
         
         # saves the data buffer onto the SD card as a SCV
+        self.left.stop()
+        self.right.stop()
+
         self.brain.sdcard.savefile(sd_file_name, bytearray(data_buffer, 'utf-8'))
+
+    def serialGraph(self, desiredValue: int, tolerance: float, settleTime: float = 0.5, stopButton = False, serialPort = '/dev/serial1'):
+        """Sends full PID data over serial compatible with V5 Serial Plotter.
+
+        Data format: {time,proportional,derivative,integral,output,desiredValue,angle}
+        
+        CSV columns:
+            time, proportional, derivative, integral, output, desiredValue, angle
+        """
+        try:
+            serial = open(serialPort,'w+b')
+        except Exception as e:
+            print("Failed to open serial port")
+            return
+
+        # makes a stopButton if set to true to manually stop the loop
+        if stopButton:
+            stop = button(60, 220, 250, 10, Color.RED, "terminate")
+            stop.draw()
+            brain.screen.render()
+
+        # Send START command
+        try:
+            serial.write(bytearray("{START}\n", 'utf-8'))
+            print("Sent START command")
+        except Exception as e:
+            print("Error sending START")
+
+        # starts up drivetrain motors with speed set to zero
+        self.right.spin(FORWARD, 0)
+        self.left.spin(FORWARD, 0)
+
+        # necessary local variables, totalError over the entire loop and i: iterations
+        totalError:float = 0.0
+        i = 0
+
+        # calculates the initial error, paying mind to the smallest angles.
+        if desiredValue - self.yourSensor() > 0:
+            if desiredValue - self.yourSensor() <= 180:
+                error:float = desiredValue - self.yourSensor()
+            elif desiredValue - self.yourSensor() > 180:
+                error:float = desiredValue - self.yourSensor() - 360
+        else:
+            if desiredValue - self.yourSensor() >= -180:
+                error:float = desiredValue - self.yourSensor()
+            elif desiredValue - self.yourSensor() < -180:
+                error:float = 360 + (desiredValue - self.yourSensor())
+
+        # adds initial error to the errorList used in detecting stabilization and previousError used in the derivative
+        errorList = [error]
+        previousError:float = error
+
+        # runs the PID loop until setpoint is stabilized by detecting the absolute smallest error
+        while abs(max(errorList, key=abs)) > tolerance:
+            # counts iterations
+            i += 1
+            #calculates error, paying mind to smallest angles
+            if desiredValue - self.yourSensor() > 0:
+                if desiredValue - self.yourSensor() <= 180:
+                    error:float = desiredValue - self.yourSensor()
+                elif desiredValue - self.yourSensor() > 180:
+                    error:float = desiredValue - self.yourSensor() - 360
+            else:
+                if desiredValue - self.yourSensor() >= -180:
+                    error:float = desiredValue - self.yourSensor()
+                elif desiredValue - self.yourSensor() < -180:
+                    error:float = 360 + (desiredValue - self.yourSensor())
+
+            # calculates derivative using error, previousError and sampling time
+            derivative = (error - previousError) / 0.050
+            # adds current error to totalError used in integral term
+            totalError += error
+            # sets output to the total PID equation or the speedCap
+            self.output = min(error * self.KP + derivative * self.KD + (totalError * 0.050) * self.KI, (self.speedCap if error * self.KP + derivative * self.KD + (totalError * 0.050) * self.KI > 0 else -self.speedCap), key=abs)
+            # sets totalError to zero if speedCap reached to prevent integral windup 
+            if abs(self.output) == self.speedCap:
+                totalError = 0
+            # sets motor velocity to the PID output
+            self.left.set_velocity(self.output, PERCENT)
+            self.right.set_velocity(-self.output, PERCENT)
+            # waits 50 MS to lighten program load
+            wait(50)
+            # sets previousError to current error for derivative term 
+            previousError = error
+            # adds error to errorList and deletes the first error if the list is longer than the settleTime divided by sampling time
+            errorList.append(error)
+            if len(errorList) > settleTime/0.050:
+                errorList.pop(0)
+            
+            # sends the data over serial with all values: {time,prop,deriv,integral,output,desiredValue,angle}
+            try:
+                timestamp = i * 0.050
+                prop = error * self.KP
+                deriv = derivative * self.KD
+                integral = totalError * 0.050 * self.KI
+                output = self.output
+                desired = desiredValue
+                angle = self.yourSensor()
+                
+                data_line = "{%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f}\n" % (timestamp, prop, deriv, integral, output, desired, angle)
+                serial.write(bytearray(data_line, 'utf-8'))
+            except Exception as e:
+                print("Error sending data")
+
+            # breaks the pid loop if the stopButton is pressed
+            if stopButton and stop.isPressed(self.brain.screen.x_position(),self.brain.screen.y_position()):
+                break
+            
+            self.brain.screen.clear_screen()
+            self.brain.screen.print_at(self.yourSensor(),x=100,y=100)
+        
+        # Send STOP command to plotter
+        try:
+            serial.write(bytearray("{STOP}\n", 'utf-8'))
+            print("Sent STOP command")
+        except Exception as e:
+            print("Error sending STOP")
+        
+        self.right.stop()
+        self.left.stop()
+
+        serial.close()
+        print("Serial connection closed")

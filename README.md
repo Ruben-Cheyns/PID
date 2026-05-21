@@ -8,10 +8,11 @@ structure:
 - **vscode**  
   vscode setup with vex extension to execute main.py
 - **src**
-  - **dynamicPlot.py**  
-    A program to run on your pc, it interprets and plots graphs from main.py.
+  - **dynamicPlot.py**
+    **WIP**
+    A program to run on your pc, it interprets and plots graphs from PID serialGraph.
   - **main.py**  
-    A bot-ready program to be run alongside dynamicPlot.py in order to tune a PID controller.
+    A bot-ready program to tune a PID controller.
   - **noiseExample.py**  
     A program generating a function, applying random noise and plotting it for explanation purposes.
   - **PID.py**  

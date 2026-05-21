@@ -298,9 +298,13 @@ class turnPID(PID):
 
             # breaks the pid loop if the stopButton is pressed
             if stopButton and stop.isPressed(self.brain.screen.x_position(),self.brain.screen.y_position()):
+                self.brain.screen.clear_screen()
                 break
         
         # saves the data buffer onto the SD card as a SCV
+        self.left.stop()
+        self.right.stop()
+
         self.brain.sdcard.savefile(sd_file_name, bytearray(data_buffer, 'utf-8'))
 
     def serialGraph(self, desiredValue: int, tolerance: float, settleTime: float = 0.5, stopButton = False, serialPort = '/dev/serial1'):
@@ -314,7 +318,7 @@ class turnPID(PID):
         try:
             serial = open(serialPort,'w+b')
         except Exception as e:
-            print(f"Failed to open serial port {serialPort}: {e}")
+            print("Failed to open serial port")
             return
 
         # makes a stopButton if set to true to manually stop the loop
@@ -328,7 +332,7 @@ class turnPID(PID):
             serial.write(bytearray("{START}\n", 'utf-8'))
             print("Sent START command")
         except Exception as e:
-            print(f"Error sending START: {e}")
+            print("Error sending START")
 
         # starts up drivetrain motors with speed set to zero
         self.right.spin(FORWARD, 0)
@@ -404,7 +408,7 @@ class turnPID(PID):
                 data_line = "{%.3f,%.3f,%.3f,%.3f,%.3f,%.3f,%.3f}\n" % (timestamp, prop, deriv, integral, output, desired, angle)
                 serial.write(bytearray(data_line, 'utf-8'))
             except Exception as e:
-                print(f"Error sending data: {e}")
+                print("Error sending data")
 
             # breaks the pid loop if the stopButton is pressed
             if stopButton and stop.isPressed(self.brain.screen.x_position(),self.brain.screen.y_position()):
@@ -418,8 +422,11 @@ class turnPID(PID):
             serial.write(bytearray("{STOP}\n", 'utf-8'))
             print("Sent STOP command")
         except Exception as e:
-            print(f"Error sending STOP: {e}")
+            print("Error sending STOP")
         
+        self.right.stop()
+        self.left.stop()
+
         serial.close()
         print("Serial connection closed")
         
@@ -463,7 +470,7 @@ def graph90():
     rotatePID.serialGraph(90,2)
 
 def dynamicGraph():
-    controllerList = [("Pcontroller",0.7,0,0,20),("Comp",0.34,0.13,0.014,100)]
+    controllerList = [("PZNcontroller",2.5,0,0,100),("PDcontroller",2.5,0,0.05,100),("PDcontroller",2.5,0,0.1,100),("P5controller",5,0,0,100),("P6controller",6,0,0,100),("Comp",0.34,0.13,0.014,100)]
     gyro.set_heading(0)
     angle = 0
     controller = 0
@@ -500,7 +507,7 @@ def dynamicGraph():
             controller_1.screen.print(str(angle) + controllerList[controller][0])
         if controller_1.buttonA.pressing():
             rotatePID.parameters(parTuple=controllerList[controller]) 
-            rotatePID.serialGraph(angle,2)
+            rotatePID.graph(angle,2, sd_file_name= str(angle) + controllerList[controller][0],stopButton=True)
             controller_1.screen.clear_row(3)
             controller_1.screen.set_cursor(3,1)
             controller_1.screen.print("done" + str(angle) + controllerList[controller][0])

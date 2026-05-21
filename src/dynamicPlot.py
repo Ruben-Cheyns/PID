@@ -7,6 +7,9 @@
 # thesis and poster (see CITATION.cff for citation formats).                 #
 # ---------------------------------------------------------------------------- #
 
+"""
+this program is a WIP and doesn't work jet
+"""
 import serial
 import sys
 from matplotlib import pyplot as plt
